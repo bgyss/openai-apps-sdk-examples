@@ -2,14 +2,21 @@
   description = "Dev environment for openai-apps-sdk-examples (Node + Python)";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
   outputs = { self, nixpkgs, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
       let
-        pkgs = import nixpkgs { inherit system; };
+        pkgs = import nixpkgs {
+          inherit system;
+          config = {
+            allowUnfreePredicate = pkg: builtins.elem (nixpkgs.lib.getName pkg) [
+              "ngrok"
+            ];
+          };
+        };
 
         # Node 20 LTS satisfies Node 18+ requirement
         nodejs = pkgs.nodejs_20;
@@ -19,6 +26,7 @@
 
         commonPackages = with pkgs; [
           git
+          pnpm
           nodejs
           python
           uv
@@ -26,14 +34,7 @@
           pre-commit
         ];
 
-        corepackHook = ''
-          # Use Corepack (bundled with Node) to activate the pinned pnpm version
-          export COREPACK_HOME="$PWD/.corepack"
-          mkdir -p "$COREPACK_HOME"
-          corepack enable >/dev/null 2>&1 || true
-          # Pinned from package.json: packageManager: pnpm@10.13.1
-          corepack prepare pnpm@10.13.1 --activate >/dev/null 2>&1 || true
-        '';
+        corepackHook = "";
 
         pythonHelp = ''
           echo "Python tips:"
@@ -47,9 +48,10 @@
         devShells = {
           default = pkgs.mkShell {
             packages = commonPackages;
-            shellHook = corepackHook + ''
+            shellHook = ''
+              export COREPACK_ENABLE=0
               echo "Loaded default dev shell (Node + Python)."
-              echo "Node: use pnpm via Corepack (pinned)."
+              echo "Node: pnpm is available from nixpkgs."
               echo "  pnpm install"
               echo "  pnpm run dev | build | serve"
               ${pythonHelp}
@@ -57,8 +59,9 @@
           };
 
           node = pkgs.mkShell {
-            packages = with pkgs; [ nodejs git pre-commit ngrok ];
-            shellHook = corepackHook + ''
+            packages = with pkgs; [ pnpm nodejs git pre-commit ngrok ];
+            shellHook = ''
+              export COREPACK_ENABLE=0
               echo "Loaded Node-only shell."
               echo "  pnpm install"
               echo "  pnpm run dev | build | serve"
